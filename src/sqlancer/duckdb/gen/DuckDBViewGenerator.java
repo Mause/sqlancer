@@ -28,8 +28,7 @@ public final class DuckDBViewGenerator {
         sb.append(") AS ");
         sb.append(DuckDBToStringVisitor.asString(DuckDBRandomQuerySynthesizer.generateSelect(globalState, nrColumns)));
         ExpectedErrors errors = new ExpectedErrors();
-        DuckDBErrors.addExpressionErrors(errors);
-        DuckDBErrors.addGroupByErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
         return new SQLQueryAdapter(sb.toString(), errors, true);
     }
 

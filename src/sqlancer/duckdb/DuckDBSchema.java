@@ -10,6 +10,7 @@ import java.util.List;
 import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
+import sqlancer.duckdb.ast.DuckDBFunction;
 import sqlancer.common.DBMSCommon;
 import sqlancer.common.schema.AbstractRelationalTable;
 import sqlancer.common.schema.AbstractSchema;
@@ -23,7 +24,7 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
 
     public enum DuckDBDataType {
 
-        INT, VARCHAR, BOOLEAN, FLOAT, DATE, TIMESTAMP, NULL;
+        INT, UINT, VARCHAR, BOOLEAN, FLOAT, DATE, TIMESTAMP, NULL;
 
         public static DuckDBDataType getRandomWithoutNull() {
             DuckDBDataType dt;
@@ -64,6 +65,9 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
             case INT:
                 size = Randomly.fromOptions(1, 2, 4, 8);
                 break;
+            case UINT:
+                size = Randomly.fromOptions(1, 2, 4, 8);
+                break;
             case FLOAT:
                 size = Randomly.fromOptions(4, 8);
                 break;
@@ -93,6 +97,19 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
                     return Randomly.fromOptions("SMALLINT", "INT2");
                 case 1:
                     return Randomly.fromOptions("TINYINT", "INT1");
+                default:
+                    throw new AssertionError(size);
+                }
+            case UINT:
+                switch (size) {
+                case 8:
+                    return Randomly.fromOptions("UBIGINT");
+                case 4:
+                    return Randomly.fromOptions("UINTEGER");
+                case 2:
+                    return Randomly.fromOptions("USMALLINT");
+                case 1:
+                    return Randomly.fromOptions("UTINYINT");
                 default:
                     throw new AssertionError(size);
                 }
@@ -151,9 +168,12 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
 
     }
 
-    public DuckDBSchema(List<DuckDBTable> databaseTables) {
+    public DuckDBSchema(List<DuckDBTable> databaseTables, List<DuckDBFunction> functionList) {
         super(databaseTables);
+        this.functionList = functionList;
     }
+
+    public List<DuckDBFunction> functionList;
 
     public DuckDBTables getRandomTableNonEmptyTables() {
         return new DuckDBTables(Randomly.nonEmptySubset(getDatabaseTables()));
@@ -181,6 +201,23 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
             break;
         case "TINYINT":
             primitiveType = DuckDBDataType.INT;
+            size = 1;
+            break;
+        case "UINTEGER":
+            primitiveType = DuckDBDataType.UINT;
+            size = 4;
+            break;
+        case "USMALLINT":
+            primitiveType = DuckDBDataType.UINT;
+            size = 2;
+            break;
+        case "UBIGINT":
+        case "UHUGEINT": // TODO: 16-bit int
+            primitiveType = DuckDBDataType.UINT;
+            size = 8;
+            break;
+        case "UTINYINT":
+            primitiveType = DuckDBDataType.UINT;
             size = 1;
             break;
         case "VARCHAR":
@@ -227,6 +264,7 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
     public static DuckDBSchema fromConnection(SQLConnection con, String databaseName) throws SQLException {
         List<DuckDBTable> databaseTables = new ArrayList<>();
         List<String> tableNames = getTableNames(con);
+        List<DuckDBFunction> functionList = getFunctions(con);
         for (String tableName : tableNames) {
             if (DBMSCommon.matchesIndexName(tableName)) {
                 continue; // TODO: unexpected?
@@ -238,9 +276,8 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
                 c.setTable(t);
             }
             databaseTables.add(t);
-
         }
-        return new DuckDBSchema(databaseTables);
+        return new DuckDBSchema(databaseTables, functionList);
     }
 
     private static List<String> getTableNames(SQLConnection con) throws SQLException {
@@ -253,6 +290,21 @@ public class DuckDBSchema extends AbstractSchema<DuckDBGlobalState, DuckDBTable>
             }
         }
         return tableNames;
+    }
+
+    private static List<DuckDBFunction> getFunctions(SQLConnection con) throws SQLException {
+        List<DuckDBFunction> functionList = new ArrayList<>();
+        try (Statement s = con.createStatement()) {
+            try (ResultSet rs = s.executeQuery("SELECT function_name AS name, MIN(LENGTH(parameters)) AS nparam, FIRST(varargs IS NOT NULL) AS hasvarargs FROM duckdb_functions() WHERE schema_name='main' AND not has_side_effects AND function_type='scalar' AND lower(function_name[1]) BETWEEN 'a' AND 'z' AND function_name NOT IN ('current_timestamp') GROUP BY function_name ORDER BY ALL;")) {
+                while (rs.next()) {
+                    String name = rs.getString("name");
+                    int nparam = rs.getInt("nparam");
+                    boolean hasvarargs = rs.getBoolean("hasvarargs");
+                    functionList.add(new DuckDBFunction(name, nparam, hasvarargs));
+                }
+            }
+        }
+        return functionList;
     }
 
     private static List<DuckDBColumn> getTableColumns(SQLConnection con, String tableName) throws SQLException {

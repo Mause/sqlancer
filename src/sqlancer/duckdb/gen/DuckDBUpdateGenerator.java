@@ -35,13 +35,13 @@ public final class DuckDBUpdateGenerator {
             Node<DuckDBExpression> expr;
             if (Randomly.getBooleanWithSmallProbability()) {
                 expr = gen.generateExpression();
-                DuckDBErrors.addExpressionErrors(errors);
+                DuckDBErrors.addFatalErrors(errors);
             } else {
                 expr = gen.generateConstant();
             }
             sb.append(DuckDBToStringVisitor.asString(expr));
         }
-        DuckDBErrors.addInsertErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
         return new SQLQueryAdapter(sb.toString(), errors);
     }
 

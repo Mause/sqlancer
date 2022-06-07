@@ -12,6 +12,10 @@ import java.util.Set;
 public class ExpectedErrors {
 
     private final Set<String> errors = new HashSet<>();
+    //! Whether or not this is an allow list or a block list
+    //! In case of an allow list, errors are expected ONLY IF they occur in the errors list (default)
+    //! In case of a block list, errors are expected UNLESS they occur in the errors list
+    private boolean isAllowList = true;
 
     public ExpectedErrors add(String error) {
         if (error == null) {
@@ -19,6 +23,10 @@ public class ExpectedErrors {
         }
         errors.add(error);
         return this;
+    }
+
+    public void setIsAllowList(boolean isAllowList) {
+        this.isAllowList = isAllowList;
     }
 
     /**
@@ -36,10 +44,10 @@ public class ExpectedErrors {
         }
         for (String s : errors) {
             if (error.contains(s)) {
-                return true;
+                return isAllowList ? true : false;
             }
         }
-        return false;
+        return isAllowList ? false : true;
     }
 
     public ExpectedErrors addAll(Collection<String> list) {

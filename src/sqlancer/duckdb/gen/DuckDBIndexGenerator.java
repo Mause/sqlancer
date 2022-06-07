@@ -6,6 +6,7 @@ import sqlancer.Randomly;
 import sqlancer.common.ast.newast.Node;
 import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
+import sqlancer.duckdb.DuckDBErrors;
 import sqlancer.duckdb.DuckDBProvider.DuckDBGlobalState;
 import sqlancer.duckdb.DuckDBSchema.DuckDBColumn;
 import sqlancer.duckdb.DuckDBSchema.DuckDBTable;
@@ -22,7 +23,6 @@ public final class DuckDBIndexGenerator {
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE ");
         if (Randomly.getBoolean()) {
-            errors.add("Cant create unique index, table contains duplicate data on indexed column(s)");
             sb.append("UNIQUE ");
         }
         sb.append("INDEX ");
@@ -49,10 +49,7 @@ public final class DuckDBIndexGenerator {
                     .generateExpression();
             sb.append(DuckDBToStringVisitor.asString(expr));
         }
-        errors.add("already exists!");
-        if (globalState.getDbmsSpecificOptions().testRowid) {
-            errors.add("Cannot create an index on the rowid!");
-        }
+        DuckDBErrors.addFatalErrors(errors);
         return new SQLQueryAdapter(sb.toString(), errors, true);
     }
 

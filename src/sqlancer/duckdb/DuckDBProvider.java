@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.List;
 
 import com.google.auto.service.AutoService;
 
@@ -20,6 +21,7 @@ import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLQueryProvider;
 import sqlancer.duckdb.DuckDBProvider.DuckDBGlobalState;
+import sqlancer.duckdb.ast.DuckDBFunction;
 import sqlancer.duckdb.gen.DuckDBDeleteGenerator;
 import sqlancer.duckdb.gen.DuckDBIndexGenerator;
 import sqlancer.duckdb.gen.DuckDBInsertGenerator;
@@ -46,8 +48,7 @@ public class DuckDBProvider extends SQLProviderAdapter<DuckDBGlobalState, DuckDB
         CREATE_VIEW(DuckDBViewGenerator::generate), //
         EXPLAIN((g) -> {
             ExpectedErrors errors = new ExpectedErrors();
-            DuckDBErrors.addExpressionErrors(errors);
-            DuckDBErrors.addGroupByErrors(errors);
+            DuckDBErrors.addFatalErrors(errors);
             return new SQLQueryAdapter(
                     "EXPLAIN " + DuckDBToStringVisitor
                             .asString(DuckDBRandomQuerySynthesizer.generateSelect(g, Randomly.smallNumber() + 1)),
@@ -92,12 +93,18 @@ public class DuckDBProvider extends SQLProviderAdapter<DuckDBGlobalState, DuckDB
     }
 
     public static class DuckDBGlobalState extends SQLGlobalState<DuckDBOptions, DuckDBSchema> {
-
         @Override
         protected DuckDBSchema readSchema() throws SQLException {
-            return DuckDBSchema.fromConnection(getConnection(), getDatabaseName());
+            DuckDBSchema result = DuckDBSchema.fromConnection(getConnection(), getDatabaseName());
+            this.functionList = result.functionList;
+            return result;
         }
 
+        public DuckDBFunction getRandomFunction() {
+            return Randomly.fromList(functionList);
+        }
+
+        public List<DuckDBFunction> functionList;
     }
 
     @Override
@@ -147,6 +154,7 @@ public class DuckDBProvider extends SQLProviderAdapter<DuckDBGlobalState, DuckDB
                 globalState.getOptions().getPassword());
         Statement stmt = conn.createStatement();
         stmt.execute("PRAGMA checkpoint_threshold='1 byte';");
+        stmt.execute("SET log_query_path='duckdb-queries.log';");
         stmt.close();
         return new SQLConnection(conn);
     }

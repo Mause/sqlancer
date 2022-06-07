@@ -19,7 +19,7 @@ public class DuckDBQueryPartitioningGroupByTester extends DuckDBQueryPartitionin
 
     public DuckDBQueryPartitioningGroupByTester(DuckDBGlobalState state) {
         super(state);
-        DuckDBErrors.addGroupByErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
     }
 
     @Override
