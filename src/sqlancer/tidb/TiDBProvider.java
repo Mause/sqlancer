@@ -5,8 +5,12 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import com.google.auto.service.AutoService;
+
 import sqlancer.AbstractAction;
+import sqlancer.DatabaseProvider;
 import sqlancer.IgnoreMeException;
+import sqlancer.MainOptions;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.SQLGlobalState;
@@ -27,6 +31,7 @@ import sqlancer.tidb.gen.TiDBTableGenerator;
 import sqlancer.tidb.gen.TiDBUpdateGenerator;
 import sqlancer.tidb.gen.TiDBViewGenerator;
 
+@AutoService(DatabaseProvider.class)
 public class TiDBProvider extends SQLProviderAdapter<TiDBGlobalState, TiDBOptions> {
 
     public TiDBProvider() {
@@ -132,8 +137,17 @@ public class TiDBProvider extends SQLProviderAdapter<TiDBGlobalState, TiDBOption
 
     @Override
     public SQLConnection createDatabase(TiDBGlobalState globalState) throws SQLException {
+        String host = globalState.getOptions().getHost();
+        int port = globalState.getOptions().getPort();
+        if (host == null) {
+            host = TiDBOptions.DEFAULT_HOST;
+        }
+        if (port == MainOptions.NO_SET_PORT) {
+            port = TiDBOptions.DEFAULT_PORT;
+        }
+
         String databaseName = globalState.getDatabaseName();
-        String url = "jdbc:mysql://127.0.0.1:4000/";
+        String url = String.format("jdbc:mysql://%s:%d/", host, port);
         Connection con = DriverManager.getConnection(url, globalState.getOptions().getUserName(),
                 globalState.getOptions().getPassword());
         globalState.getState().logStatement("USE test");

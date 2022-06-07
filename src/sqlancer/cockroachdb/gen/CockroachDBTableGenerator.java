@@ -34,14 +34,14 @@ public class CockroachDBTableGenerator extends CockroachDBGenerator {
 
     @Override
     public void buildStatement() {
-        errors.add("https://github.com/cockroachdb/cockroach/issues/35730"); // not indexable array types
-        if (globalState.getDmbsSpecificOptions().testTempTables) {
+        errors.add("and thus is not indexable"); // array types are not indexable
+        if (globalState.getDbmsSpecificOptions().testTempTables) {
             errors.add("constraints on temporary tables may reference only temporary tables");
             errors.add("constraints on permanent tables may reference only permanent tables");
         }
         String tableName = globalState.getSchema().getFreeTableName();
         sb.append("CREATE ");
-        if (Randomly.getBoolean() && globalState.getDmbsSpecificOptions().testTempTables) {
+        if (Randomly.getBoolean() && globalState.getDbmsSpecificOptions().testTempTables) {
             sb.append("TEMP ");
         }
         sb.append("TABLE ");
@@ -75,6 +75,7 @@ public class CockroachDBTableGenerator extends CockroachDBGenerator {
                 sb.append(CockroachDBVisitor.asString(gen.generateExpression(cockroachDBColumn.getType())));
                 sb.append(") STORED");
                 errors.add("computed columns cannot reference other computed columns");
+                errors.add("context-dependent operators are not allowed in computed column");
                 errors.add("has type unknown");
             }
             if (Randomly.getBooleanWithRatherLowProbability()) {
@@ -166,9 +167,6 @@ public class CockroachDBTableGenerator extends CockroachDBGenerator {
             errors.add("there is no unique constraint matching given keys for referenced table");
         }
         sb.append(")");
-        if (Randomly.getBooleanWithRatherLowProbability() && !globalState.getSchema().getDatabaseTables().isEmpty()) {
-            generateInterleave();
-        }
         errors.add("collatedstring");
         CockroachDBErrors.addExpressionErrors(errors);
     }

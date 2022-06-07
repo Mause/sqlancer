@@ -21,7 +21,6 @@ public final class H2SetGenerator {
         BUILTIN_ALIAS_OVERRIDE((r) -> Randomly.fromOptions("TRUE", "FALSE")), //
         COLLATION((r) -> Randomly.fromOptions("OFF", "ENGLISH", "ENGLISH STRENGTH PRIMARY",
                 "ENGLISH STRENGTH SECONDARY", "ENGLISH STRENGTH TERTIARY", "ENGLISH STRENGTH IDENTICAL")), //
-        COMPRESS_LOB((r) -> Randomly.fromOptions("NO", "LZF", "DEFLATE")), //
         DEFAULT_NULL_ORDERING((r) -> Randomly.fromOptions("LOW", "HIGH", "FIRST", "LAST")), //
         DEFAULT_TABLE_TYPE((r) -> Randomly.fromOptions("MEMORY", "CACHED")), //
         IGNORECASE((r) -> Randomly.fromOptions("TRUE", "FALSE")), //
@@ -34,8 +33,7 @@ public final class H2SetGenerator {
         OPTIMIZE_REUSE_RESULTS((r) -> Randomly.fromOptions(0, 1)), //
         QUERY_STATISTICS((r) -> Randomly.fromOptions("TRUE", "FALSE")), //
         QUERY_STATISTICS_MAX_ENTRIES((r) -> Randomly.getNotCachedInteger(0, 100000)), //
-        REFERENTIAL_INTEGRITY((r) -> Randomly.fromOptions("TRUE", "FALSE")), //
-        UNDO_LOG((r) -> Randomly.fromOptions("TRUE", "FALSE"));
+        REFERENTIAL_INTEGRITY((r) -> Randomly.fromOptions("TRUE", "FALSE")); //
 
         private Function<Randomly, Object> prod;
 

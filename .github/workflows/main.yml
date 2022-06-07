@@ -17,12 +17,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
-      - name: Build and check for warnings
-        run: mvn -B package -DskipTests 2>/dev/null | grep -vz "WARNING"
+          java-version: 11
       - name: Verify
         run: mvn -B verify -DskipTests=true
       - name: Misc Tests
@@ -35,16 +33,17 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Set up Citus
         run: |
+          echo "deb http://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" | sudo tee  /etc/apt/sources.list.d/pgdg.list
           curl https://install.citusdata.com/community/deb.sh | sudo bash
-          sudo apt-get -y install postgresql-13-citus-9.5
+          sudo apt-get -y install postgresql-13-citus-10.1
           sudo chown -R $USER:$USER /var/run/postgresql
           export PATH=/usr/lib/postgresql/13/bin:$PATH
           cd ~
@@ -68,8 +67,8 @@ jobs:
           psql -c "CREATE EXTENSION citus;" -p 9700 -U $USER -d test
           psql -c "CREATE EXTENSION citus;" -p 9701 -U $USER -d test
           psql -c "CREATE EXTENSION citus;" -p 9702 -U $USER -d test
-          psql -c "SELECT * from master_add_node('localhost', 9701);" -p 9700 -U $USER -d test
-          psql -c "SELECT * from master_add_node('localhost', 9702);" -p 9700 -U $USER -d test
+          psql -c "SELECT * from citus_add_node('localhost', 9701);" -p 9700 -U $USER -d test
+          psql -c "SELECT * from citus_add_node('localhost', 9702);" -p 9700 -U $USER -d test
       - name: Run Tests
         run: CITUS_AVAILABLE=true mvn -Dtest=TestCitus test
 
@@ -80,10 +79,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Set up ClickHouse
@@ -102,19 +101,19 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Set up CockroachDB
         run: |
-          wget -qO- https://binaries.cockroachdb.com/cockroach-v20.1.2.linux-amd64.tgz | tar  xvz
-          cd cockroach-v20.1.2.linux-amd64/ && ./cockroach start-single-node --insecure &
+          wget -qO- https://binaries.cockroachdb.com/cockroach-v21.1.7.linux-amd64.tgz | tar  xvz
+          cd cockroach-v21.1.7.linux-amd64/ && ./cockroach start-single-node --insecure &
           sleep 10
       - name: Create SQLancer user
-        run: cd cockroach-v20.1.2.linux-amd64/ && ./cockroach sql --insecure -e "CREATE USER sqlancer; GRANT admin to sqlancer" && cd ..
+        run: cd cockroach-v21.1.7.linux-amd64/ && ./cockroach sql --insecure -e "CREATE USER sqlancer; GRANT admin to sqlancer" && cd ..
       - name: Run Tests
         run: COCKROACHDB_AVAILABLE=true mvn -Dtest=TestCockroachDB test
 
@@ -126,10 +125,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build
         run: mvn -B package -DskipTests=true
       - name: DuckDB Tests
@@ -142,35 +141,27 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
-      - name: Set up H2
-        run: |
-          git clone https://github.com/h2database/h2database
-          cd h2database/h2
-          ./build.sh jar
-          cp bin/h2-2.0.201.jar ../../target/lib/h2-1.4.200.jar
-          cp bin/h2-2.0.201.jar ~/.m2/repository/com/h2database/h2/1.4.200/h2-1.4.200.jar
-          ls -lh ../../target/lib
       - name: Run Tests
         run: H2_AVAILABLE=true mvn -Dtest=TestH2 test
 
   mariadb:
     name: DBMS Tests (MariaDB)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
 
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Install MariaDB
@@ -187,15 +178,15 @@ jobs:
 
   mysql:
     name: DBMS Tests (MySQL)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Set up MySQL
@@ -227,10 +218,10 @@ jobs:
           postgresql user: 'sqlancer'
           postgresql password: 'sqlancer'
           postgresql db: 'test'
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Run Tests
@@ -244,10 +235,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build
         run: mvn -B package -DskipTests=true
       - name: SQLite Tests
@@ -263,10 +254,10 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
-      - name: Set up JDK 1.8
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Build SQLancer
         run: mvn -B package -DskipTests=true
       - name: Set up TiDB
@@ -278,24 +269,6 @@ jobs:
         run: sudo mysql -h 127.0.0.1 -P 4000 -u root -D test -e "CREATE USER 'sqlancer'@'%' IDENTIFIED WITH mysql_native_password BY 'sqlancer'; GRANT ALL PRIVILEGES ON *.* TO 'sqlancer'@'%' WITH GRANT OPTION; FLUSH PRIVILEGES;"
       - name: Run Tests
         run: TIDB_AVAILABLE=true mvn -Dtest=TestTiDB test
-
-
-  java8:
-    name: Java 8 Compatibility (DuckDB)
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
-        with:
-          java-version: 1.8
-      - name: Build
-        run: mvn -B package -DskipTests=true
-      - name: Shortly run DuckDB
-        run: cd target && java -jar $(ls | grep -P 'sqlancer-[0-9.]*.jar') --num-threads 4 --timeout-seconds 30 --num-queries 0 duckdb
 
   java13:
     name: Java 13 Compatibility (DuckDB)

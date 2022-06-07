@@ -26,7 +26,8 @@ public class CockroachDBIndexGenerator extends CockroachDBGenerator {
         errors.add("already contains column");
         errors.add("violates unique constraint");
         errors.add("schema change statement cannot follow a statement that has written in the same transaction");
-        errors.add("https://github.com/cockroachdb/cockroach/issues/35730"); // some array types are not indexable
+        errors.add("and thus is not indexable"); // array types are not indexable
+        errors.add("the following columns are not indexable due to their type"); // array types are not indexable
         errors.add("cannot determine type of empty array. Consider annotating with the desired type");
         errors.add("incompatible IF expression"); // TODO: investigate; seems to be a bug
         CockroachDBTable table = globalState.getSchema().getRandomTable(t -> !t.isView());
@@ -38,7 +39,7 @@ public class CockroachDBIndexGenerator extends CockroachDBGenerator {
         sb.append(table.getName());
         List<CockroachDBColumn> columns = table.getRandomNonEmptyColumnSubset();
         addColumns(sb, columns, true);
-        boolean hashSharded = globalState.getDmbsSpecificOptions().testHashIndexes
+        boolean hashSharded = globalState.getDbmsSpecificOptions().testHashIndexes
                 && Randomly.getBooleanWithSmallProbability();
         if (hashSharded) {
             sb.append(" USING HASH WITH BUCKET_COUNT=");
@@ -51,9 +52,6 @@ public class CockroachDBIndexGenerator extends CockroachDBGenerator {
             sb.append(Randomly.fromOptions("STORING", "COVERING"));
             sb.append(" ");
             addColumns(sb, table.getRandomNonEmptyColumnSubset(), false);
-        }
-        if (!hashSharded /* interleaved indexes cannot also be hash sharded */ && Randomly.getBoolean()) {
-            generateInterleave();
         }
     }
 

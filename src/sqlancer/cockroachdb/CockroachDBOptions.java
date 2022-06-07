@@ -18,13 +18,15 @@ import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPDistinctOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPExtendedWhereOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPGroupByOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPHavingOracle;
-import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPJoinOracle;
 import sqlancer.cockroachdb.oracle.tlp.CockroachDBTLPWhereOracle;
 import sqlancer.common.oracle.CompositeTestOracle;
 import sqlancer.common.oracle.TestOracle;
 
-@Parameters(separators = "=", commandDescription = "Test CockroachDB")
+@Parameters(separators = "=", commandDescription = "CockroachDB (default port: " + CockroachDBOptions.DEFAULT_PORT
+        + " default host: " + CockroachDBOptions.DEFAULT_HOST + ")")
 public class CockroachDBOptions implements DBMSSpecificOptions<CockroachDBOracleFactory> {
+    public static final String DEFAULT_HOST = "localhost";
+    public static final int DEFAULT_PORT = 26257;
 
     @Parameter(names = "--oracle")
     public CockroachDBOracleFactory oracle = CockroachDBOracleFactory.NOREC;
@@ -72,12 +74,6 @@ public class CockroachDBOptions implements DBMSSpecificOptions<CockroachDBOracle
             @Override
             public TestOracle create(CockroachDBGlobalState globalState) throws SQLException {
                 return new CockroachDBTLPExtendedWhereOracle(globalState);
-            }
-        },
-        JOIN {
-            @Override
-            public TestOracle create(CockroachDBGlobalState globalState) throws SQLException {
-                return new CockroachDBTLPJoinOracle(globalState);
             }
         },
         QUERY_PARTITIONING {

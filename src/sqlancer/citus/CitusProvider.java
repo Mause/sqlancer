@@ -10,7 +10,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.google.auto.service.AutoService;
+
 import sqlancer.AbstractAction;
+import sqlancer.DatabaseProvider;
 import sqlancer.IgnoreMeException;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
@@ -21,8 +24,10 @@ import sqlancer.citus.gen.CitusDeleteGenerator;
 import sqlancer.citus.gen.CitusIndexGenerator;
 import sqlancer.citus.gen.CitusInsertGenerator;
 import sqlancer.citus.gen.CitusSetGenerator;
+import sqlancer.citus.gen.CitusTableGenerator;
 import sqlancer.citus.gen.CitusUpdateGenerator;
 import sqlancer.citus.gen.CitusViewGenerator;
+import sqlancer.common.DBMSCommon;
 import sqlancer.common.oracle.CompositeTestOracle;
 import sqlancer.common.oracle.TestOracle;
 import sqlancer.common.query.ExpectedErrors;
@@ -49,6 +54,7 @@ import sqlancer.postgres.gen.PostgresTransactionGenerator;
 import sqlancer.postgres.gen.PostgresTruncateGenerator;
 import sqlancer.postgres.gen.PostgresVacuumGenerator;
 
+@AutoService(DatabaseProvider.class)
 public class CitusProvider extends PostgresProvider {
 
     @SuppressWarnings("unchecked")
@@ -272,6 +278,20 @@ public class CitusProvider extends PostgresProvider {
     }
 
     @Override
+    protected void createTables(PostgresGlobalState globalState, int numTables) throws Exception {
+        while (globalState.getSchema().getDatabaseTables().size() < numTables) {
+            try {
+                String tableName = DBMSCommon.createTableName(globalState.getSchema().getDatabaseTables().size());
+                SQLQueryAdapter createTable = CitusTableGenerator.generate(tableName, globalState.getSchema(),
+                        generateOnlyKnown, globalState);
+                globalState.executeStatement(createTable);
+            } catch (IgnoreMeException e) {
+
+            }
+        }
+    }
+
+    @Override
     public void generateDatabase(PostgresGlobalState globalState) throws Exception {
         readFunctions(globalState);
         createTables(globalState, Randomly.fromOptions(4, 5, 6));
@@ -300,7 +320,7 @@ public class CitusProvider extends PostgresProvider {
 
     @Override
     protected TestOracle getTestOracle(PostgresGlobalState globalState) throws SQLException {
-        List<TestOracle> oracles = ((CitusOptions) globalState.getDmbsSpecificOptions()).citusOracle.stream().map(o -> {
+        List<TestOracle> oracles = ((CitusOptions) globalState.getDbmsSpecificOptions()).citusOracle.stream().map(o -> {
             try {
                 return o.create(globalState);
             } catch (Exception e1) {
@@ -312,10 +332,10 @@ public class CitusProvider extends PostgresProvider {
 
     private List<CitusWorkerNode> readCitusWorkerNodes(PostgresGlobalState globalState, SQLConnection con)
             throws SQLException {
-        globalState.getState().logStatement("SELECT * FROM master_get_active_worker_nodes()");
+        globalState.getState().logStatement("SELECT * FROM citus_get_active_worker_nodes()");
         List<CitusWorkerNode> citusWorkerNodes = new ArrayList<>();
         try (Statement s = con.createStatement()) {
-            ResultSet rs = s.executeQuery("SELECT * FROM master_get_active_worker_nodes();");
+            ResultSet rs = s.executeQuery("SELECT * FROM citus_get_active_worker_nodes();");
             while (rs.next()) {
                 String nodeHost = rs.getString("node_name");
                 int nodePort = rs.getInt("node_port");
@@ -374,7 +394,7 @@ public class CitusProvider extends PostgresProvider {
     private void addCitusWorkerNodes(PostgresGlobalState globalState, SQLConnection con,
             List<CitusWorkerNode> citusWorkerNodes) throws SQLException {
         for (CitusWorkerNode w : citusWorkerNodes) {
-            String addWorkers = "SELECT * from master_add_node('" + w.getHost() + "', " + w.getPort() + ");";
+            String addWorkers = "SELECT * from citus_add_node('" + w.getHost() + "', " + w.getPort() + ");";
             globalState.getState().logStatement(addWorkers);
             try (Statement s = con.createStatement()) {
                 s.execute(addWorkers);
@@ -415,7 +435,7 @@ public class CitusProvider extends PostgresProvider {
             // reconnect to coordinator node, test database
             con = new SQLConnection(DriverManager.getConnection("jdbc:" + testURL, username, password));
             ((CitusGlobalState) globalState)
-                    .setRepartition(((CitusOptions) globalState.getDmbsSpecificOptions()).repartition);
+                    .setRepartition(((CitusOptions) globalState.getDbmsSpecificOptions()).repartition);
             globalState.getState().commentStatements();
             return con;
         }

@@ -63,6 +63,7 @@ public final class PostgresCommon {
         errors.add("is of type boolean but expression is of type text");
         errors.add("a negative number raised to a non-integer power yields a complex result");
         errors.add("could not determine polymorphic type because input has type unknown");
+        errors.add("character number must be positive");
         addToCharFunctionErrors(errors);
         addBitStringOperationErrors(errors);
         addFunctionErrors(errors);
@@ -114,6 +115,7 @@ public final class PostgresCommon {
         errors.add("result of range difference would not be contiguous");
         errors.add("out of range");
         errors.add("malformed range literal");
+        errors.add("result of range union would not be contiguous");
     }
 
     public static void addCommonInsertUpdateErrors(ExpectedErrors errors) {

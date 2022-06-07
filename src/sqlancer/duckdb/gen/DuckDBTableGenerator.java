@@ -36,32 +36,32 @@ public class DuckDBTableGenerator {
             sb.append(columns.get(i).getName());
             sb.append(" ");
             sb.append(columns.get(i).getType());
-            if (globalState.getDmbsSpecificOptions().testCollate && Randomly.getBooleanWithRatherLowProbability()
+            if (globalState.getDbmsSpecificOptions().testCollate && Randomly.getBooleanWithRatherLowProbability()
                     && columns.get(i).getType().getPrimitiveDataType() == DuckDBDataType.VARCHAR) {
                 sb.append(" COLLATE ");
                 sb.append(getRandomCollate());
             }
-            if (globalState.getDmbsSpecificOptions().testIndexes && Randomly.getBooleanWithRatherLowProbability()) {
+            if (globalState.getDbmsSpecificOptions().testIndexes && Randomly.getBooleanWithRatherLowProbability()) {
                 sb.append(" UNIQUE");
             }
-            if (globalState.getDmbsSpecificOptions().testNotNullConstraints
+            if (globalState.getDbmsSpecificOptions().testNotNullConstraints
                     && Randomly.getBooleanWithRatherLowProbability()) {
                 sb.append(" NOT NULL");
             }
-            if (globalState.getDmbsSpecificOptions().testCheckConstraints
+            if (globalState.getDbmsSpecificOptions().testCheckConstraints
                     && Randomly.getBooleanWithRatherLowProbability()) {
                 sb.append(" CHECK(");
                 sb.append(DuckDBToStringVisitor.asString(gen.generateExpression()));
                 DuckDBErrors.addExpressionErrors(errors);
                 sb.append(")");
             }
-            if (Randomly.getBoolean() && globalState.getDmbsSpecificOptions().testDefaultValues) {
+            if (Randomly.getBoolean() && globalState.getDbmsSpecificOptions().testDefaultValues) {
                 sb.append(" DEFAULT(");
                 sb.append(DuckDBToStringVisitor.asString(gen.generateConstant()));
                 sb.append(")");
             }
         }
-        if (globalState.getDmbsSpecificOptions().testIndexes && Randomly.getBoolean()) {
+        if (globalState.getDbmsSpecificOptions().testIndexes && Randomly.getBoolean()) {
             errors.add("Invalid type for index");
             List<DuckDBColumn> primaryKeyColumns = Randomly.nonEmptySubset(columns);
             sb.append(", PRIMARY KEY(");
@@ -80,7 +80,7 @@ public class DuckDBTableGenerator {
         List<DuckDBColumn> columns = new ArrayList<>();
         for (int i = 0; i < Randomly.smallNumber() + 1; i++) {
             String columnName = String.format("c%d", i);
-            DuckDBCompositeDataType columnType = DuckDBCompositeDataType.getRandom();
+            DuckDBCompositeDataType columnType = DuckDBCompositeDataType.getRandomWithoutNull();
             columns.add(new DuckDBColumn(columnName, columnType, false, false));
         }
         return columns;

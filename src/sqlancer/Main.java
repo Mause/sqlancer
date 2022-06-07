@@ -12,28 +12,20 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.JCommander.Builder;
 
-import sqlancer.citus.CitusProvider;
-import sqlancer.clickhouse.ClickHouseProvider;
-import sqlancer.cockroachdb.CockroachDBProvider;
 import sqlancer.common.log.Loggable;
 import sqlancer.common.query.Query;
 import sqlancer.common.query.SQLancerResultSet;
-import sqlancer.duckdb.DuckDBProvider;
-import sqlancer.h2.H2Provider;
-import sqlancer.mariadb.MariaDBProvider;
-import sqlancer.mysql.MySQLProvider;
-import sqlancer.postgres.PostgresProvider;
-import sqlancer.sqlite3.SQLite3Provider;
-import sqlancer.tidb.TiDBProvider;
 
 public final class Main {
 
@@ -42,7 +34,7 @@ public final class Main {
     public static volatile AtomicLong nrDatabases = new AtomicLong();
     public static volatile AtomicLong nrSuccessfulActions = new AtomicLong();
     public static volatile AtomicLong nrUnsuccessfulActions = new AtomicLong();
-    static int threadsShutdown;
+    public static volatile AtomicLong threadsShutdown = new AtomicLong();
     static boolean progressMonitorStarted;
 
     static {
@@ -209,7 +201,7 @@ public final class Main {
                     .getInfo(state.getDatabaseName(), state.getDatabaseVersion(), state.getSeedValue()).getLogString());
 
             for (Query<?> s : state.getStatements()) {
-                sb.append(s.getQueryString());
+                sb.append(s.getLogString());
                 sb.append('\n');
             }
             try {
@@ -306,7 +298,7 @@ public final class Main {
             state.setRandomly(r);
             state.setDatabaseName(databaseName);
             state.setMainOptions(options);
-            state.setDmbsSpecificOptions(command);
+            state.setDbmsSpecificOptions(command);
             try (C con = provider.createDatabase(state)) {
                 QueryManager<C> manager = new QueryManager<>(state);
                 try {
@@ -340,7 +332,7 @@ public final class Main {
             state.setRandomly(r);
             state.setDatabaseName(databaseName);
             state.setMainOptions(options);
-            state.setDmbsSpecificOptions(command);
+            state.setDbmsSpecificOptions(command);
             return state;
         }
 
@@ -400,9 +392,6 @@ public final class Main {
         Builder commandBuilder = JCommander.newBuilder().addObject(options);
         for (DatabaseProvider<?, ?, ?> provider : providers) {
             String name = provider.getDBMSName();
-            if (!name.toLowerCase().equals(name)) {
-                throw new AssertionError(name + " should be in lowercase!");
-            }
             DBMSExecutorFactory<?, ?, ?> executorFactory = new DBMSExecutorFactory<>(provider, options);
             commandBuilder = commandBuilder.addCommand(name, executorFactory.getCommand());
             nameToProvider.put(name, executorFactory);
@@ -453,11 +442,12 @@ public final class Main {
                         .testConnection();
             } catch (Exception e) {
                 System.err.println(
-                        "SQLancer failed creating a test database, indicating that SQLancer might have failed connecting to the DBMS. In order to change the username and password, you can use the --username and --password options. Currently, SQLancer does not yet support passing a host and port (see https://github.com/sqlancer/sqlancer/issues/95).\n\n");
+                        "SQLancer failed creating a test database, indicating that SQLancer might have failed connecting to the DBMS. In order to change the username, password, host and port, you can use the --username, --password, --host and --port options.\n\n");
                 e.printStackTrace();
                 return options.getErrorExitCode();
             }
         }
+        final AtomicBoolean someOneFails = new AtomicBoolean(false);
 
         for (int i = 0; i < options.getTotalNumberTries(); i++) {
             final String databaseName = options.getDatabasePrefix() + i;
@@ -478,23 +468,18 @@ public final class Main {
                 private void runThread(final String databaseName) {
                     Randomly r = new Randomly(seed);
                     try {
-                        if (options.getMaxGeneratedDatabases() == -1) {
-                            // run without a limit
-                            boolean continueRunning = true;
-                            while (continueRunning) {
-                                continueRunning = run(options, execService, executorFactory, r, databaseName);
-                            }
-                        } else {
-                            for (int i = 0; i < options.getMaxGeneratedDatabases(); i++) {
-                                boolean continueRunning = run(options, execService, executorFactory, r, databaseName);
-                                if (!continueRunning) {
-                                    break;
-                                }
+                        int maxNrDbs = options.getMaxGeneratedDatabases();
+                        // run without a limit if maxNrDbs == -1
+                        for (int i = 0; i < maxNrDbs || maxNrDbs == -1; i++) {
+                            Boolean continueRunning = run(options, execService, executorFactory, r, databaseName);
+                            if (!continueRunning) {
+                                someOneFails.set(true);
+                                break;
                             }
                         }
                     } finally {
-                        threadsShutdown++;
-                        if (threadsShutdown == options.getTotalNumberTries()) {
+                        threadsShutdown.addAndGet(1);
+                        if (threadsShutdown.get() == options.getTotalNumberTries()) {
                             execService.shutdown();
                         }
                     }
@@ -539,21 +524,24 @@ public final class Main {
             e.printStackTrace();
         }
 
-        return threadsShutdown == 0 ? 0 : options.getErrorExitCode();
+        return someOneFails.get() ? options.getErrorExitCode() : 0;
     }
 
+    /**
+     * To register a new provider, it is necessary to implement the DatabaseProvider interface and add an additional
+     * configuration file, see https://docs.oracle.com/javase/9/docs/api/java/util/ServiceLoader.html. Currently, we use
+     * an @AutoService annotation to create the configuration file automatically. This allows SQLancer to pick up
+     * providers in other JARs on the classpath.
+     *
+     * @return The list of service providers on the classpath
+     */
     static List<DatabaseProvider<?, ?, ?>> getDBMSProviders() {
         List<DatabaseProvider<?, ?, ?>> providers = new ArrayList<>();
-        providers.add(new SQLite3Provider());
-        providers.add(new CockroachDBProvider());
-        providers.add(new MySQLProvider());
-        providers.add(new MariaDBProvider());
-        providers.add(new TiDBProvider());
-        providers.add(new PostgresProvider());
-        providers.add(new CitusProvider());
-        providers.add(new ClickHouseProvider());
-        providers.add(new DuckDBProvider());
-        providers.add(new H2Provider());
+        @SuppressWarnings("rawtypes")
+        ServiceLoader<DatabaseProvider> loader = ServiceLoader.load(DatabaseProvider.class);
+        for (DatabaseProvider<?, ?, ?> provider : loader) {
+            providers.add(provider);
+        }
         return providers;
     }
 
@@ -594,7 +582,7 @@ public final class Main {
                 System.out.println(String.format(
                         "[%s] Executed %d queries (%d queries/s; %.2f/s dbs, successful statements: %2d%%). Threads shut down: %d.",
                         dateFormat.format(date), currentNrQueries, (int) throughput, throughputDbs,
-                        successfulStatementsRatio, threadsShutdown));
+                        successfulStatementsRatio, threadsShutdown.get()));
                 timeMillis = System.currentTimeMillis();
                 lastNrQueries = currentNrQueries;
                 lastNrDbs = currentNrDbs;

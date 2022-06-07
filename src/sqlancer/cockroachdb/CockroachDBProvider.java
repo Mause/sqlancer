@@ -8,6 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.google.auto.service.AutoService;
+
+import sqlancer.DatabaseProvider;
 import sqlancer.IgnoreMeException;
 import sqlancer.Main.QueryManager;
 import sqlancer.MainOptions;
@@ -34,6 +37,7 @@ import sqlancer.common.query.ExpectedErrors;
 import sqlancer.common.query.SQLQueryAdapter;
 import sqlancer.common.query.SQLQueryProvider;
 
+@AutoService(DatabaseProvider.class)
 public class CockroachDBProvider extends SQLProviderAdapter<CockroachDBGlobalState, CockroachDBOptions> {
 
     public CockroachDBProvider() {
@@ -54,12 +58,9 @@ public class CockroachDBProvider extends SQLProviderAdapter<CockroachDBGlobalSta
         SHOW(CockroachDBShowGenerator::show), //
         TRANSACTION((g) -> {
             String s = Randomly.fromOptions("BEGIN", "ROLLBACK", "COMMIT");
-            return new SQLQueryAdapter(s,
-                    ExpectedErrors.from("there is no transaction in progress",
-                            "there is already a transaction in progress", "current transaction is aborted",
-                            "does not exist" /* interleaved indexes */));
-        }), //
-        EXPLAIN((g) -> {
+            return new SQLQueryAdapter(s, ExpectedErrors.from("there is no transaction in progress",
+                    "there is already a transaction in progress", "current transaction is aborted"));
+        }), EXPLAIN((g) -> {
             StringBuilder sb = new StringBuilder("EXPLAIN ");
             ExpectedErrors errors = new ExpectedErrors();
             if (Randomly.getBoolean()) {
@@ -135,10 +136,10 @@ public class CockroachDBProvider extends SQLProviderAdapter<CockroachDBGlobalSta
         standardSettings.add("SET CLUSTER SETTING sql.stats.automatic_collection.enabled = 'off'");
         standardSettings.add("SET CLUSTER SETTING timeseries.storage.enabled = 'off'");
 
-        if (globalState.getDmbsSpecificOptions().testHashIndexes) {
+        if (globalState.getDbmsSpecificOptions().testHashIndexes) {
             standardSettings.add("set experimental_enable_hash_sharded_indexes='on';");
         }
-        if (globalState.getDmbsSpecificOptions().testTempTables) {
+        if (globalState.getDbmsSpecificOptions().testTempTables) {
             standardSettings.add("SET experimental_enable_temp_tables = 'on'");
         }
         for (String s : standardSettings) {
@@ -241,15 +242,23 @@ public class CockroachDBProvider extends SQLProviderAdapter<CockroachDBGlobalSta
             }
             total--;
         }
-        if (globalState.getDmbsSpecificOptions().makeVectorizationMoreLikely && Randomly.getBoolean()) {
+        if (globalState.getDbmsSpecificOptions().makeVectorizationMoreLikely && Randomly.getBoolean()) {
             manager.execute(new SQLQueryAdapter("SET vectorize=on;"));
         }
     }
 
     @Override
     public SQLConnection createDatabase(CockroachDBGlobalState globalState) throws SQLException {
+        String host = globalState.getOptions().getHost();
+        int port = globalState.getOptions().getPort();
+        if (host == null) {
+            host = CockroachDBOptions.DEFAULT_HOST;
+        }
+        if (port == MainOptions.NO_SET_PORT) {
+            port = CockroachDBOptions.DEFAULT_PORT;
+        }
         String databaseName = globalState.getDatabaseName();
-        String url = "jdbc:postgresql://localhost:26257/test";
+        String url = String.format("jdbc:postgresql://%s:%d/test", host, port);
         Connection con = DriverManager.getConnection(url, globalState.getOptions().getUserName(),
                 globalState.getOptions().getPassword());
         globalState.getState().logStatement("USE test");
@@ -259,12 +268,6 @@ public class CockroachDBProvider extends SQLProviderAdapter<CockroachDBGlobalSta
         globalState.getState().logStatement("USE " + databaseName);
         try (Statement s = con.createStatement()) {
             s.execute("DROP DATABASE IF EXISTS " + databaseName);
-        } catch (SQLException e) {
-            if (e.getMessage().contains("ERROR: invalid interleave backreference")) {
-                throw new IgnoreMeException(); // TODO: investigate
-            } else {
-                throw e;
-            }
         }
         try (Statement s = con.createStatement()) {
             s.execute(createDatabaseCommand);

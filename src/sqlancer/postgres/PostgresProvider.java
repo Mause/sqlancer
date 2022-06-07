@@ -8,8 +8,12 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Arrays;
 
+import com.google.auto.service.AutoService;
+
 import sqlancer.AbstractAction;
+import sqlancer.DatabaseProvider;
 import sqlancer.IgnoreMeException;
+import sqlancer.MainOptions;
 import sqlancer.Randomly;
 import sqlancer.SQLConnection;
 import sqlancer.SQLProviderAdapter;
@@ -42,6 +46,7 @@ import sqlancer.postgres.gen.PostgresViewGenerator;
 
 // EXISTS
 // IN
+@AutoService(DatabaseProvider.class)
 public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, PostgresOptions> {
 
     /**
@@ -54,9 +59,11 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
     protected String password;
     protected String entryPath;
     protected String host;
+    protected int port;
     protected String testURL;
     protected String databaseName;
     protected String createDatabaseCommand;
+    protected String extensionsList;
 
     public PostgresProvider() {
         super(PostgresGlobalState.class, PostgresOptions.class);
@@ -189,23 +196,43 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
         readFunctions(globalState);
         createTables(globalState, Randomly.fromOptions(4, 5, 6));
         prepareTables(globalState);
+
+        extensionsList = globalState.getDbmsSpecificOptions().extensions;
+        if (!extensionsList.isEmpty()) {
+            String[] extensionNames = extensionsList.split(",");
+
+            /*
+             * To avoid of a test interference with an extension objects, create them in a separate schema. Of course,
+             * they must be truly relocatable.
+             */
+            globalState.executeStatement(new SQLQueryAdapter("CREATE SCHEMA extensions;", true));
+            for (int i = 0; i < extensionNames.length; i++) {
+                globalState.executeStatement(new SQLQueryAdapter(
+                        "CREATE EXTENSION " + extensionNames[i] + " WITH SCHEMA extensions;", true));
+            }
+        }
     }
 
     @Override
     public SQLConnection createDatabase(PostgresGlobalState globalState) throws SQLException {
-        if (globalState.getDmbsSpecificOptions().getTestOracleFactory().stream()
+        if (globalState.getDbmsSpecificOptions().getTestOracleFactory().stream()
                 .anyMatch((o) -> o == PostgresOracleFactory.PQS)) {
             generateOnlyKnown = true;
         }
 
         username = globalState.getOptions().getUserName();
         password = globalState.getOptions().getPassword();
+        host = globalState.getOptions().getHost();
+        port = globalState.getOptions().getPort();
         entryPath = "/test";
-        entryURL = globalState.getDmbsSpecificOptions().connectionURL;
+        entryURL = globalState.getDbmsSpecificOptions().connectionURL;
         // trim URL to exclude "jdbc:"
         if (entryURL.startsWith("jdbc:")) {
             entryURL = entryURL.substring(5);
         }
+        String entryDatabaseName = entryPath.substring(1);
+        databaseName = globalState.getDatabaseName();
+
         try {
             URI uri = new URI(entryURL);
             String userInfoURI = uri.getUserInfo();
@@ -228,12 +255,16 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             if (pathURI != null) {
                 entryPath = pathURI;
             }
-            host = uri.getHost();
+            if (host == null) {
+                host = uri.getHost();
+            }
+            if (port == MainOptions.NO_SET_PORT) {
+                port = uri.getPort();
+            }
+            entryURL = String.format("%s://%s:%d/%s", uri.getScheme(), host, port, entryDatabaseName);
         } catch (URISyntaxException e) {
             throw new AssertionError(e);
         }
-        String entryDatabaseName = entryPath.substring(1);
-        databaseName = globalState.getDatabaseName();
         Connection con = DriverManager.getConnection("jdbc:" + entryURL, username, password);
         globalState.getState().logStatement(String.format("\\c %s;", entryDatabaseName));
         globalState.getState().logStatement("DROP DATABASE IF EXISTS " + databaseName);
@@ -246,11 +277,12 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
             s.execute(createDatabaseCommand);
         }
         con.close();
-        int databaseIndex = entryURL.indexOf(entryPath) + 1;
+        int databaseIndex = entryURL.indexOf(entryDatabaseName);
         String preDatabaseName = entryURL.substring(0, databaseIndex);
         String postDatabaseName = entryURL.substring(databaseIndex + entryDatabaseName.length());
         testURL = preDatabaseName + databaseName + postDatabaseName;
         globalState.getState().logStatement(String.format("\\c %s;", databaseName));
+
         con = DriverManager.getConnection("jdbc:" + testURL, username, password);
         return new SQLConnection(con);
     }
@@ -293,7 +325,7 @@ public class PostgresProvider extends SQLProviderAdapter<PostgresGlobalState, Po
     private String getCreateDatabaseCommand(PostgresGlobalState state) {
         StringBuilder sb = new StringBuilder();
         sb.append("CREATE DATABASE " + databaseName + " ");
-        if (Randomly.getBoolean() && ((PostgresOptions) state.getDmbsSpecificOptions()).testCollations) {
+        if (Randomly.getBoolean() && ((PostgresOptions) state.getDbmsSpecificOptions()).testCollations) {
             if (Randomly.getBoolean()) {
                 sb.append("WITH ENCODING '");
                 sb.append(Randomly.fromOptions("utf8"));
