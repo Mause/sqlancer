@@ -33,7 +33,7 @@ public class DuckDBQueryPartitioningBase
 
     public DuckDBQueryPartitioningBase(DuckDBGlobalState state) {
         super(state);
-        DuckDBErrors.addExpressionErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
     }
 
     public static String canonicalizeResultValue(String value) {

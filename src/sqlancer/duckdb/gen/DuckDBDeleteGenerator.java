@@ -23,7 +23,7 @@ public final class DuckDBDeleteGenerator {
             sb.append(DuckDBToStringVisitor.asString(
                     new DuckDBExpressionGenerator(globalState).setColumns(table.getColumns()).generateExpression()));
         }
-        DuckDBErrors.addExpressionErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
         return new SQLQueryAdapter(sb.toString(), errors);
     }
 

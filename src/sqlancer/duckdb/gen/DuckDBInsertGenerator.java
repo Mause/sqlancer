@@ -36,7 +36,7 @@ public class DuckDBInsertGenerator extends AbstractInsertGenerator<DuckDBColumn>
         sb.append(")");
         sb.append(" VALUES ");
         insertColumns(columns);
-        DuckDBErrors.addInsertErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
         return new SQLQueryAdapter(sb.toString(), errors);
     }
 

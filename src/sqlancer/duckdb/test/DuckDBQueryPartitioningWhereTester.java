@@ -14,7 +14,7 @@ public class DuckDBQueryPartitioningWhereTester extends DuckDBQueryPartitioningB
 
     public DuckDBQueryPartitioningWhereTester(DuckDBGlobalState state) {
         super(state);
-        DuckDBErrors.addGroupByErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
     }
 
     @Override

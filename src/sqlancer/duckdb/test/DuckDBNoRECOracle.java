@@ -40,7 +40,7 @@ public class DuckDBNoRECOracle extends NoRECBase<DuckDBGlobalState> implements T
     public DuckDBNoRECOracle(DuckDBGlobalState globalState) {
         super(globalState);
         this.s = globalState.getSchema();
-        DuckDBErrors.addExpressionErrors(errors);
+        DuckDBErrors.addFatalErrors(errors);
     }
 
     @Override
@@ -81,7 +81,6 @@ public class DuckDBNoRECOracle extends NoRECBase<DuckDBGlobalState> implements T
         select.setJoinList(joins);
         int secondCount = 0;
         unoptimizedQueryString = "SELECT SUM(count) FROM (" + DuckDBToStringVisitor.asString(select) + ") as res";
-        errors.add("canceling statement due to statement timeout");
         SQLQueryAdapter q = new SQLQueryAdapter(unoptimizedQueryString, errors);
         SQLancerResultSet rs;
         try {
@@ -122,6 +121,12 @@ public class DuckDBNoRECOracle extends NoRECBase<DuckDBGlobalState> implements T
             optimizedQueryString = DuckDBToStringVisitor.asString(select);
             if (options.logEachSelect()) {
                 logger.writeCurrent(optimizedQueryString);
+                 try {
+                     logger.getCurrentFileWriter().flush();
+                 } catch (Exception e) {
+                     // TODO Auto-generated catch block
+                     e.printStackTrace();
+                 }
             }
             try (ResultSet rs = stat.executeQuery(optimizedQueryString)) {
                 while (rs.next()) {

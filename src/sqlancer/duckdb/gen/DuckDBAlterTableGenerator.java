@@ -20,8 +20,6 @@ public final class DuckDBAlterTableGenerator {
 
     public static SQLQueryAdapter getQuery(DuckDBGlobalState globalState) {
         ExpectedErrors errors = new ExpectedErrors();
-        errors.add(" does not have a column with name \"rowid\"");
-        errors.add("Table does not contain column rowid referenced in alter statement");
         StringBuilder sb = new StringBuilder("ALTER TABLE ");
         DuckDBTable table = globalState.getSchema().getRandomTable(t -> !t.isView());
         DuckDBExpressionGenerator gen = new DuckDBExpressionGenerator(globalState).setColumns(table.getColumns());
@@ -43,23 +41,13 @@ public final class DuckDBAlterTableGenerator {
             sb.append(DuckDBCompositeDataType.getRandomWithoutNull().toString());
             if (Randomly.getBoolean()) {
                 sb.append(" USING ");
-                DuckDBErrors.addExpressionErrors(errors);
+                DuckDBErrors.addFatalErrors(errors);
                 sb.append(DuckDBToStringVisitor.asString(gen.generateExpression()));
             }
-            errors.add("Cannot change the type of this column: an index depends on it!");
-            errors.add("Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
-            errors.add("Unimplemented type for cast");
-            errors.add("Conversion:");
-            errors.add("Cannot change the type of a column that has a CHECK constraint specified");
             break;
         case DROP_COLUMN:
             sb.append("DROP COLUMN ");
             sb.append(table.getRandomColumn().getName());
-            errors.add("named in key does not exist"); // TODO
-            errors.add("Cannot drop this column:");
-            errors.add("Cannot drop column: table only has one column remaining!");
-            errors.add("because there is a CHECK constraint that depends on it");
-            errors.add("because there is a UNIQUE constraint that depends on it");
             break;
         default:
             throw new AssertionError(action);

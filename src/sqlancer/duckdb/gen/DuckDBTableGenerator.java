@@ -52,7 +52,7 @@ public class DuckDBTableGenerator {
                     && Randomly.getBooleanWithRatherLowProbability()) {
                 sb.append(" CHECK(");
                 sb.append(DuckDBToStringVisitor.asString(gen.generateExpression()));
-                DuckDBErrors.addExpressionErrors(errors);
+                DuckDBErrors.addFatalErrors(errors);
                 sb.append(")");
             }
             if (Randomly.getBoolean() && globalState.getDbmsSpecificOptions().testDefaultValues) {
@@ -62,7 +62,6 @@ public class DuckDBTableGenerator {
             }
         }
         if (globalState.getDbmsSpecificOptions().testIndexes && Randomly.getBoolean()) {
-            errors.add("Invalid type for index");
             List<DuckDBColumn> primaryKeyColumns = Randomly.nonEmptySubset(columns);
             sb.append(", PRIMARY KEY(");
             sb.append(primaryKeyColumns.stream().map(c -> c.getName()).collect(Collectors.joining(", ")));
